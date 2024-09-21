@@ -24,6 +24,9 @@ from typing import Optional
 from pymongo import MongoClient
 
 import uvicorn
+from fastapi.middleware.cors import CORSMiddleware
+
+
 
 
 
@@ -40,6 +43,15 @@ os.environ["LANGSMITH_TRACING"] = "true"
 
 # Initialize FastAPI app
 app = FastAPI()
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Connect to MongoDB Atlas
 client = MongoClient(ATLAS_CONNECTION_STRING)
