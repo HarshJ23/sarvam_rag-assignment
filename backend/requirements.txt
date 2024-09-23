@@ -12,3 +12,4 @@ pypdf
 langchain-mongodb 
 pymongo
 python-dotenv
+tavily-python

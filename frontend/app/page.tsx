@@ -95,7 +95,7 @@ export default function Home() {
 
           {isLoading && (
             <Loader />
-          )}
+           )}
         </section>
       </main>
 
