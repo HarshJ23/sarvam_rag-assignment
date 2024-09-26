@@ -1,7 +1,7 @@
 'use client'
 import React, { useState, ChangeEvent, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
-import { LuSend, LuVolume2, LuPause } from "react-icons/lu";
+import { LuSend, LuVolume2, LuPause, LuYoutube } from "react-icons/lu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -12,6 +12,11 @@ interface Message {
   type: 'user' | 'bot';
   text: string;
   audio_base64?: string;
+  suggested_video?: {
+    title: string;
+    link: string;
+    thumbnail: string;
+  };
 }
 
 const placeholders = [
@@ -26,7 +31,7 @@ export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [placeholderIndex, setPlaceholderIndex] = useState<number>(0);
-  const [isPlaying, setIsPlaying] = useState<boolean>(false);
+  const [currentlyPlayingIndex, setCurrentlyPlayingIndex] = useState<number | null>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
 
@@ -64,29 +69,38 @@ export default function Home() {
       });
   
       if (response.ok) {
-        const data: { answer: string, audio_base64: string } = await response.json();
+        const data: { answer: string, audio_base64?: string, suggested_video?: { title: string, link: string, thumbnail: string } } = await response.json();
         console.log('Response from backend', data);
   
-        setMessages(prevMessages => [...prevMessages, { type: 'bot', text: data.answer, audio_base64: data.audio_base64 }]);
-        setIsLoading(false);
+        setMessages(prevMessages => [...prevMessages, { 
+          type: 'bot', 
+          text: data.answer, 
+          audio_base64: data.audio_base64,
+          suggested_video: data.suggested_video
+        }]);
       } else {
         console.error('Error in response:', response.statusText);
       }
     } catch (error) {
       console.error('Error sending message:', error);
+    } finally {
+      setIsLoading(false);
+      setUserQuery("");
     }
-    setUserQuery("");
   };
 
-  const toggleAudio = (audio_base64: string) => {
-    if (audioRef.current) {
-      if (isPlaying) {
+  const toggleAudio = (index: number, audio_base64?: string) => {
+    if (audioRef.current && audio_base64) {
+      if (currentlyPlayingIndex === index) {
         audioRef.current.pause();
-        setIsPlaying(false);
+        setCurrentlyPlayingIndex(null);
       } else {
+        if (currentlyPlayingIndex !== null) {
+          audioRef.current.pause();
+        }
         audioRef.current.src = `data:audio/wav;base64,${audio_base64}`;
         audioRef.current.play();
-        setIsPlaying(true);
+        setCurrentlyPlayingIndex(index);
       }
     }
   };
@@ -106,19 +120,37 @@ export default function Home() {
               </Avatar>
               <div className='text-xs md:text-base'>
                 <Markdown remarkPlugins={[remarkGfm]}>{message.text}</Markdown>
-                {message.type === 'bot' && message.audio_base64 && (
-                  <Button 
-                    onClick={() => toggleAudio(message.audio_base64 as string)} 
-                    className="mt-2 p-2 h-7 w-10 rounded-md"
-                    variant="outline"
-                  >
-                    {isPlaying ? (
-                      <LuPause className="text-base text-orange-500" />
-                    ) : (
-                      <LuVolume2 className="text-base text-orange-500" />
-                    )}
-                  </Button>
-                )}
+                <div className="flex items-center gap-2 mt-2">
+                  {message.type === 'bot' && message.audio_base64 && (
+                    <Button 
+                      onClick={() => toggleAudio(index, message.audio_base64)}
+                      className="p-2 h-8 w-10 rounded-2xl"
+                      variant="outline"
+                    >
+                      {currentlyPlayingIndex === index ? (
+                        <LuPause className="text-lg text-orange-500" />
+                      ) : (
+                        <LuVolume2 className="text-lg text-orange-500" />
+                      )}
+                    </Button>
+                  )}
+                  {message.type === 'bot' && message.suggested_video && (
+                    <a 
+                      href={message.suggested_video.link} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 p-2 rounded-2xl hover:bg-gray-100 transition-colors"
+                      title={message.suggested_video.title}
+                    >
+                      <LuYoutube className="text-lg text-red-500" />
+                      <span className="text-sm">
+      Suggested video : <span> {message.suggested_video.title.length > 15
+        ? `${message.suggested_video.title.slice(0, 15)}...`
+        : message.suggested_video.title}</span>
+    </span>
+                    </a>
+                  )}
+                </div>
               </div>
             </div>
           ))}
@@ -155,7 +187,7 @@ export default function Home() {
           <p className='text-[11px] items-center text-center mt-1'>Disclaimer: The responses are AI-Generated. It may contain mistakes.</p>
         </div>
       </footer>
-      <audio ref={audioRef} onEnded={() => setIsPlaying(false)} />
+      <audio ref={audioRef} onEnded={() => setCurrentlyPlayingIndex(null)} />
     </>
   );
 }

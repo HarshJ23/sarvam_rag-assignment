@@ -1,84 +1,106 @@
-# FastAPI Agentic RAG Project
+# NCERT RAG System with AI Agent and Voice Integration
 
-This project implements an Agentic Retrieval-Augmented Generation (RAG) system using FastAPI, LangChain, and MongoDB Atlas. It provides an API endpoint for question-answering based on a specific knowledge base.
+## Introduction
+
+This project implements a Retrieval-Augmented Generation (RAG) system with an AI agent and voice integration capabilities. It's designed to work with NCERT PDF text data, providing intelligent responses to user queries. The system consists of a backend built with FastAPI and a frontend next.js application.
 
 ## Features
 
-- Agentic RAG system for intelligent information retrieval and response generation
-- FastAPI endpoint for easy integration
-- MongoDB Atlas integration for efficient vector search
-- OpenAI's GPT models for natural language processing
+1. **RAG System**
+   - Utilizes a vector database to store and retrieve NCERT text data
+   - FastAPI endpoint for querying the RAG system
+   - Next.JS-based frontend for user interaction
 
-## Prerequisites
+2. **AI Agent**
+   - Intelligent decision-making to determine when to use the vector database
+   - Additional tool/action integration - retriever tool and  YT search tool.
 
-- Python 3.8+
-- MongoDB Atlas account
-- OpenAI API key
+3. **Voice Integration**
+   - Text-to-Speech functionality using Sarvam AI's API
+   - Audio playback of AI responses in the frontend
 
-## Installation
+## Technologies Used
+
+- Backend:
+  - FastAPI
+  - LangChain
+  - Langgraph
+  - MongoDB  (as vector store.)
+  - OpenAI GPT-4
+  - Sarvam AI TTS API
+
+- Frontend:
+  - Next.js 
+  - Tailwind CSS 
+
+## Setup and Installation
 
 1. Clone the repository:
    ```
-   git clone https://github.com/yourusername/fastapi-agentic-rag.git
+   git clone https://github.com/HarshJ23/agentic_rag_langraph
+   cd agentic_rag
+   ```
+
+2. Set up the backend:
+   ```
    cd backend
-   ```
-
-2. Create and activate a virtual environment:
-   ```
-   python -m venv venv
-   source venv/bin/activate  # On Windows, use `venv\Scripts\activate`
-   ```
-
-3. Install the required dependencies:
-   ```
    pip install -r requirements.txt
    ```
 
-## Configuration
-
-1. Create a `.env` file in the project root and add your API keys:
+3. Create a `.env` file in the backend directory with the following variables:
    ```
    OPENAI_API_KEY=your_openai_api_key
-   MONGODB_ATLAS_CONNECTION_STRING=your_mongodb_atlas_connection_string
-
+   ATLAS_CONNECTION_STRING=your_mongodb_atlas_connection_string
+   LANGSMITH_API_KEY=your_langsmith_api_key
+   SARVAM_API_KEY=your_sarvam_api_key
+   SERPAPI_API_KEY = your_serp_key
    ```
 
-2. Update the `db_name`, `collection_name`, and `vector_search_index` variables in the main script if necessary.
+4. Set up the frontend:
+   ```
+   cd ../frontend
+   npm install
+   ```
+
+## Running the Application
+
+1. Start the backend server:
+   ```
+   cd backend
+   uvicorn main:app --reload or python main.py
+   ```
+
+2. In a new terminal, start the frontend development server:
+   ```
+   cd frontend
+   npm run dev
+   ```
+
+3. Open your browser and navigate to `http://localhost:3000` (or the port specified by your React setup).
 
 ## Usage
 
-1. Start the FastAPI server:
-   ```
-   uvicorn app:app --reload
-   ```
+1. Enter your query in the input field at the bottom of the page.
+2. Press Enter or click the Send button to submit your query.
+3. The AI will process your query, potentially using the RAG system when necessary.
+4. The response will be displayed in the chat interface.
+5. If audio is available, a play button will appear next to the response. Click it to hear the AI's response.
 
-2. The API will be available at `http://localhost:8000`. You can use the `/query` endpoint to ask questions:
-   ```
-   curl -X POST "http://localhost:8000/query" -H "Content-Type: application/json" -d '{"question": "What is the speed of sound in solids?"}'
-   ```
 
-3. You can also use the interactive SwaggerUI at `http://localhost:8000/docs` to test the API.
 
-## Project Structure
 
-- `main.py`: The main FastAPI application file containing the Agentic RAG implementation and API endpoint.
-- `requirements.txt`: List of Python dependencies.
-- `.gitignore`: Specifies intentionally untracked files to ignore.
-- `README.md`: This file, containing project documentation.
+## API Endpoints
 
-## How It Works
+- `POST /query`: Send a user query and receive an AI response
+  - Request body: `{ "question": "Your question here" }`
+  - Response: `{ "answer": "AI response", "audio_base64": "Base64 encoded audio (if available)" , "suggested_video" :  {"title": "",link": "","thumbnail": ""} }`
+  - 
 
-1. The user sends a question to the `/query` endpoint.
-2. The system uses an agent to decide whether to retrieve information or not.
-3. If retrieval is needed, it uses MongoDB Atlas to find relevant documents.
-4. The retrieved documents are graded for relevance.
-5. Based on the grading, the system either generates an answer or rewrites the query for another retrieval attempt.
-6. The final answer is returned to the user.
+## LLM Usage
 
-## Contributing
+This project utilizes OpenAI's GPT-4 model for natural language processing and generation. The LLM is used in conjunction with the RAG system to provide context-aware responses based on the NCERT dataset.
 
-Contributions are welcome! Please feel free to submit a Pull Request.
 
-## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+
+

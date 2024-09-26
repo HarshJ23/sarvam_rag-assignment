@@ -1,6 +1,6 @@
 import os
 import getpass
-from typing import List, Dict, Any, Annotated, Literal, Sequence, TypedDict, Optional
+from typing import List, Union, Dict, Any, Annotated, Literal, Sequence, TypedDict, Optional
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 import requests
@@ -15,6 +15,8 @@ from langchain_core.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_mongodb import MongoDBAtlasVectorSearch
 from langchain.tools.retriever import create_retriever_tool
+from langchain.chains import LLMChain
+from langchain_openai import OpenAI
 
 from langgraph.graph import END, StateGraph, START
 from langgraph.prebuilt import ToolNode, tools_condition
@@ -22,18 +24,20 @@ from langgraph.graph.message import add_messages
 from dotenv import load_dotenv
 
 from pymongo import MongoClient
+from serpapi import GoogleSearch
 
 import uvicorn
 from fastapi.middleware.cors import CORSMiddleware
 
 load_dotenv()
 
-# Set up environment variables
+
 os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
 ATLAS_CONNECTION_STRING = os.getenv("ATLAS_CONNECTION_STRING")
 os.environ["LANGSMITH_API_KEY"] = os.getenv("LANGSMITH_API_KEY")
 os.environ["LANGSMITH_TRACING"] = "true"
 SARVAM_API_KEY = os.getenv("SARVAM_API_KEY")
+SERPAPI_API_KEY = os.getenv("SERPAPI_API_KEY")
 
 app = FastAPI()
 
@@ -45,14 +49,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Connect to MongoDB Atlas
+#  MongoDB Atlas connection
 client = MongoClient(ATLAS_CONNECTION_STRING)
 db_name = "langchain_db"
 collection_name = "sarvam_ncert"
 atlas_collection = client[db_name][collection_name]
 vector_search_index = "vector_index"
 
-# Set up retriever
+#  retriever
 retriever = MongoDBAtlasVectorSearch(
     embedding=OpenAIEmbeddings(),
     collection=atlas_collection,
@@ -60,7 +64,7 @@ retriever = MongoDBAtlasVectorSearch(
     relevance_score_fn="cosine",
 ).as_retriever()
 
-# Create retriever tool
+# retriever-mongo
 retriever_tool = create_retriever_tool(
     retriever,
     "retrieve_blog_posts",
@@ -68,11 +72,21 @@ retriever_tool = create_retriever_tool(
 )
 tools = [retriever_tool]
 
-# Define AgentState
+class VideoInfo(BaseModel):
+    title: str
+    link: str
+    thumbnail: str
+
+# class Response(BaseModel):
+#     answer: str
+#     audio_base64: Optional[str] = None
+#     suggested_video: Optional[VideoInfo] = None
+
+# AgentState
 class AgentState(TypedDict):
     messages: Annotated[Sequence[BaseMessage], add_messages]
 
-# Define nodes
+
 def agent(state: AgentState) -> Dict[str, List[BaseMessage]]:
     messages = state["messages"]
     model = ChatOpenAI(temperature=0, model="gpt-4-turbo-preview")
@@ -130,7 +144,7 @@ def generate(state: AgentState) -> Dict[str, List[str]]:
     response = rag_chain.invoke({"context": docs, "question": question})
     return {"messages": [response]}
 
-# Set up the workflow graph
+#workflow graph
 workflow = StateGraph(AgentState)
 workflow.add_node("agent", agent)
 retrieve = ToolNode(tools)
@@ -160,20 +174,26 @@ workflow.add_edge("rewrite", "agent")
 
 graph = workflow.compile()
 
-# FastAPI models
+
 class Query(BaseModel):
     question: str
+
+class VideoInfo(BaseModel):
+    title: str
+    link: str
+    thumbnail: str    
 
 class Response(BaseModel):
     answer: str
     audio_base64: Optional[str] = None
+    suggested_video: Optional[Dict[str, str]] = None
 
 def generate_audio(text: str) -> Optional[str]:
     url = "https://api.sarvam.ai/text-to-speech"
     payload = {
         "inputs": [text],
         "target_language_code": "hi-IN",
-        "speaker": "arvind",
+        "speaker": "meera",
         "pitch": 0,
         "pace": 1.65,
         "loudness": 1.5,
@@ -201,6 +221,51 @@ def generate_audio(text: str) -> Optional[str]:
         logging.error(f"Error calling Sarvam AI TTS API: {str(e)}")
         return None
 
+def extract_key_topics(text: str) -> Optional[str]:
+    llm = OpenAI(temperature=0)
+    prompt = PromptTemplate(
+        input_variables=["text"],
+        template="""
+        Analyze the following text and determine if it's related to the sound chapter from NCERT textbooks.
+        If it is related to sound, extract 3-5 key topics from the text, separated by commas.
+        If it's not related to sound, return 'Not related to sound chapter'.
+
+        Text: {text}
+
+        Output:
+        """
+    )
+    chain = LLMChain(llm=llm, prompt=prompt)
+    result = chain.run(text).strip()
+    
+    if result == 'Not related to sound chapter':
+        return None
+    return result
+
+
+def search_youtube_video(query: str) -> Optional[Dict[str, str]]:
+    try:
+        params = {
+            "engine": "youtube",
+            "search_query": query,
+            "api_key": SERPAPI_API_KEY
+        }
+        search = GoogleSearch(params)
+        results = search.get_dict()
+        
+        if "video_results" in results and len(results["video_results"]) > 0:
+            video = results["video_results"][0]
+            return {
+                "title": video["title"],
+                "link": video["link"],
+                "thumbnail": video["thumbnail"]["static"]  
+            }
+    except Exception as e:
+        logging.error(f"Error searching YouTube: {str(e)}")
+    
+    return None
+
+
 @app.post("/query", response_model=Response)
 async def process_query(query: Query):
     try:
@@ -212,11 +277,15 @@ async def process_query(query: Query):
         final_message = result["messages"][-1]
         answer = final_message.content if isinstance(final_message, BaseMessage) else str(final_message)
         
-        # Generate audio
         audio_base64 = generate_audio(answer)
         
-        # Return the response, even if audio generation failed
-        return Response(answer=answer, audio_base64=audio_base64)
+        key_topics = extract_key_topics(answer)
+        suggested_video = None
+        if key_topics:
+            suggested_video = search_youtube_video(f"NCERT Sound {key_topics}")
+        
+        # response with the suggested video
+        return Response(answer=answer, audio_base64=audio_base64, suggested_video=suggested_video)
     except Exception as e:
         logging.error(f"Error processing query: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
