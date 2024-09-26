@@ -4,6 +4,13 @@
 
 This project implements a Retrieval-Augmented Generation (RAG) system with an AI agent and voice integration capabilities. It's designed to work with NCERT PDF text data, providing intelligent responses to user queries. The system consists of a backend built with FastAPI and a frontend next.js application.
 
+
+## Demo video:
+Click here: [RAG assistant demo video](https://drive.google.com/file/d/1vcXVbHm3yoZRFQn6Fgj412YRv62b2g0v/view?usp=sharing)
+![demo](https://i.ibb.co/YbsJPCK/image.png)
+
+
+
 ## Features
 
 1. **RAG System**

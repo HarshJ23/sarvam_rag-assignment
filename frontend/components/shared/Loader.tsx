@@ -9,7 +9,7 @@ export default function Loader() {
 
 const [step, setStep] = useState(0)
   const steps = ['Thinking', 'Searching the doc', 'Generating answer']
-  const timeIntervals = [5000, 7000, 3000];
+  const timeIntervals = [5000, 10000, 12000];
 
   useEffect(() => {
     const timeout = setTimeout(() => {
