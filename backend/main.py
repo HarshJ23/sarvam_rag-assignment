@@ -1,10 +1,12 @@
 import os
 import getpass
-from typing import List, Dict, Any, Annotated, Literal, Sequence, TypedDict
+from typing import List, Dict, Any, Annotated, Literal, Sequence, TypedDict, Optional
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 import requests
 import logging
+import json
+import base64
 
 from langchain import hub
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
@@ -18,31 +20,22 @@ from langgraph.graph import END, StateGraph, START
 from langgraph.prebuilt import ToolNode, tools_condition
 from langgraph.graph.message import add_messages
 from dotenv import load_dotenv
-from typing import Optional
-
 
 from pymongo import MongoClient
 
 import uvicorn
 from fastapi.middleware.cors import CORSMiddleware
 
+load_dotenv()
 
-
-
-
-load_dotenv()  # take environment variables from .env.
 # Set up environment variables
 os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
 ATLAS_CONNECTION_STRING = os.getenv("ATLAS_CONNECTION_STRING")
 os.environ["LANGSMITH_API_KEY"] = os.getenv("LANGSMITH_API_KEY")
 os.environ["LANGSMITH_TRACING"] = "true"
-
-
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
+SARVAM_API_KEY = os.getenv("SARVAM_API_KEY")
 
 app = FastAPI()
-
 
 app.add_middleware(
     CORSMiddleware,
@@ -131,7 +124,7 @@ def generate(state: AgentState) -> Dict[str, List[str]]:
     docs = messages[-1].content
 
     prompt = hub.pull("rlm/rag-prompt")
-    llm = ChatOpenAI(model_name="gpt-4o", temperature=0)
+    llm = ChatOpenAI(model_name="gpt-4", temperature=0)
     rag_chain = prompt | llm | StrOutputParser()
 
     response = rag_chain.invoke({"context": docs, "question": question})
@@ -173,8 +166,40 @@ class Query(BaseModel):
 
 class Response(BaseModel):
     answer: str
-    # audio_base64: Optional[str] = None
+    audio_base64: Optional[str] = None
 
+def generate_audio(text: str) -> Optional[str]:
+    url = "https://api.sarvam.ai/text-to-speech"
+    payload = {
+        "inputs": [text],
+        "target_language_code": "hi-IN",
+        "speaker": "arvind",
+        "pitch": 0,
+        "pace": 1.65,
+        "loudness": 1.5,
+        "speech_sample_rate": 8000,
+        "enable_preprocessing": True,
+        "model": "bulbul:v1"
+    }
+    headers = {
+        "Content-Type": "application/json",
+        "api-subscription-key": SARVAM_API_KEY
+    }
+
+    try:
+        logging.info("Sending request to Sarvam AI TTS API")
+        response = requests.post(url, json=payload, headers=headers)
+        response.raise_for_status()
+        
+        response_data = response.json()
+        if "audios" in response_data and len(response_data["audios"]) > 0:
+            return response_data["audios"][0]
+        else:
+            logging.warning("No audio data found in the response")
+            return None
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Error calling Sarvam AI TTS API: {str(e)}")
+        return None
 
 @app.post("/query", response_model=Response)
 async def process_query(query: Query):
@@ -184,17 +209,17 @@ async def process_query(query: Query):
         }
         result = graph.invoke(inputs)
         
-        # Extract the final answer from the result
         final_message = result["messages"][-1]
         answer = final_message.content if isinstance(final_message, BaseMessage) else str(final_message)
         
-        return Response(answer=answer)
+        # Generate audio
+        audio_base64 = generate_audio(answer)
+        
+        # Return the response, even if audio generation failed
+        return Response(answer=answer, audio_base64=audio_base64)
     except Exception as e:
+        logging.error(f"Error processing query: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
-
-
-
-   

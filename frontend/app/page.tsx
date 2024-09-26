@@ -1,7 +1,7 @@
 'use client'
 import React, { useState, ChangeEvent, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
-import { LuSend } from "react-icons/lu";
+import { LuSend, LuVolume2, LuPause } from "react-icons/lu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -11,6 +11,7 @@ import HomeStarter from '@/components/shared/HomeStarter';
 interface Message {
   type: 'user' | 'bot';
   text: string;
+  audio_base64?: string;
 }
 
 const placeholders = [
@@ -25,7 +26,9 @@ export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [placeholderIndex, setPlaceholderIndex] = useState<number>(0);
+  const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
 
   const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
     setUserQuery(e.target.value);
@@ -38,7 +41,7 @@ export default function Home() {
 
     const intervalId = setInterval(() => {
       setPlaceholderIndex((prevIndex) => (prevIndex + 1) % placeholders.length);
-    }, 3000); // Change placeholder every 3 seconds
+    }, 3000);
 
     return () => clearInterval(intervalId);
   }, [messages]);
@@ -61,10 +64,10 @@ export default function Home() {
       });
   
       if (response.ok) {
-        const data: { answer: string } = await response.json();
+        const data: { answer: string, audio_base64: string } = await response.json();
         console.log('Response from backend', data);
   
-        setMessages(prevMessages => [...prevMessages, { type: 'bot', text: data.answer }]);
+        setMessages(prevMessages => [...prevMessages, { type: 'bot', text: data.answer, audio_base64: data.audio_base64 }]);
         setIsLoading(false);
       } else {
         console.error('Error in response:', response.statusText);
@@ -72,15 +75,29 @@ export default function Home() {
     } catch (error) {
       console.error('Error sending message:', error);
     }
+    setUserQuery("");
+  };
+
+  const toggleAudio = (audio_base64: string) => {
+    if (audioRef.current) {
+      if (isPlaying) {
+        audioRef.current.pause();
+        setIsPlaying(false);
+      } else {
+        audioRef.current.src = `data:audio/wav;base64,${audio_base64}`;
+        audioRef.current.play();
+        setIsPlaying(true);
+      }
+    }
   };
 
   return (
     <>
       <main className="flex min-h-screen flex-col items-center px-14 py-24">
         <section ref={chatContainerRef} className="w-full md:w-3/4 lg:w-2/3 h-full flex flex-col gap-3 overflow-y-auto">
-        {messages.length == 0 && 
-        <HomeStarter/>
-        }
+          {messages.length == 0 && 
+            <HomeStarter/>
+          }
           {messages.map((message, index) => (
             <div key={index} className="flex flex-row gap-3 my-2 z-40">
               <Avatar className='z-20'>
@@ -89,13 +106,26 @@ export default function Home() {
               </Avatar>
               <div className='text-xs md:text-base'>
                 <Markdown remarkPlugins={[remarkGfm]}>{message.text}</Markdown>
+                {message.type === 'bot' && message.audio_base64 && (
+                  <Button 
+                    onClick={() => toggleAudio(message.audio_base64 as string)} 
+                    className="mt-2 p-2 h-7 w-10 rounded-md"
+                    variant="outline"
+                  >
+                    {isPlaying ? (
+                      <LuPause className="text-base text-orange-500" />
+                    ) : (
+                      <LuVolume2 className="text-base text-orange-500" />
+                    )}
+                  </Button>
+                )}
               </div>
             </div>
           ))}
 
           {isLoading && (
             <Loader />
-           )}
+          )}
         </section>
       </main>
 
@@ -108,14 +138,24 @@ export default function Home() {
               onChange={handleInputChange}
               className="w-full border-none outline-none z-50 text-xs md:text-sm lg:text-base border-orange-500"
               placeholder={placeholders[placeholderIndex]}
+              onKeyPress={(e) => {
+                if (e.key === 'Enter') {
+                  sendMessage(userQuery);
+                }
+              }}
             />
-            <Button type="submit" className="rounded-xl bg-orange-400 hover:bg-orange-600 font-semibold transition ease-in-out" onClick={() => { sendMessage(userQuery); setUserQuery(""); }}>
+            <Button 
+              type="submit" 
+              className="rounded-xl bg-orange-400 hover:bg-orange-600 font-semibold transition ease-in-out" 
+              onClick={() => sendMessage(userQuery)}
+            >
               <LuSend className="text-lg text-white font-semibold" />
             </Button>
           </div>
           <p className='text-[11px] items-center text-center mt-1'>Disclaimer: The responses are AI-Generated. It may contain mistakes.</p>
         </div>
       </footer>
+      <audio ref={audioRef} onEnded={() => setIsPlaying(false)} />
     </>
   );
 }
