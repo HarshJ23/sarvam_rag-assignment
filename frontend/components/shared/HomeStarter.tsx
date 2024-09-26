@@ -1,8 +1,5 @@
 import React from 'react'
-import { Shirt } from 'lucide-react';
-import { CookingPot } from 'lucide-react';
-import { Paintbrush } from 'lucide-react';
-import { Heater } from 'lucide-react';
+
 import Image from 'next/image';
 
 

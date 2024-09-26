@@ -1,6 +1,5 @@
 "use client"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Skeleton } from "@/components/ui/skeleton"
 
 import { useState, useEffect } from 'react'
 import { Loader2 } from 'lucide-react'
